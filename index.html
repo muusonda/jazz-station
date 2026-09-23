@@ -153,6 +153,24 @@
       white-space: nowrap;
       border: 0;
     }
+    @media (max-width: 600px) {
+      .play-control {
+        width: 58px;
+        bottom: max(18px, env(safe-area-inset-bottom));
+        left: max(18px, env(safe-area-inset-left));
+      }
+      .mood-control {
+        width: clamp(132px, 38vw, 170px);
+        right: max(18px, env(safe-area-inset-right));
+        bottom: max(20px, env(safe-area-inset-bottom));
+      }
+      .audio-status {
+        max-width: min(260px, calc(100vw - 36px));
+        left: max(18px, env(safe-area-inset-left));
+        bottom: calc(max(18px, env(safe-area-inset-bottom)) + 64px);
+        font-size: 11px;
+      }
+    }
     @media (prefers-reduced-motion: reduce) {
       .play-control { transition: none; }
     }
