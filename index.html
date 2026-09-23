@@ -1,0 +1,782 @@
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff">
+  <title>Jazz Station — Illustration</title>
+  <style>
+    :root { color-scheme: only light; background: #fff; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #fff; }
+    canvas { display: block; width: 100%; height: 100%; background: #fff; }
+    #shirt-particles {
+      position: fixed;
+      z-index: 1;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      pointer-events: none;
+    }
+    #shirt-motifs {
+      position: fixed;
+      z-index: 2;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: transparent;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: none;
+    }
+    .play-control {
+      position: fixed;
+      z-index: 10;
+      bottom: max(clamp(24px, 8vh, 140px), env(safe-area-inset-bottom));
+      left: max(clamp(24px, 7vw, 100px), env(safe-area-inset-left));
+      display: grid;
+      place-items: center;
+      width: 79.2px;
+      aspect-ratio: 1;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .play-control:hover { background: #f5f5f5; }
+    .play-control:focus-visible { outline: 2px solid #777; outline-offset: 4px; }
+    .play-control[aria-pressed="true"]:not(.is-bursting) .play-symbol { visibility: hidden; }
+    .play-symbol {
+      display: block;
+      width: 73.8%;
+      height: 73.8%;
+      object-fit: contain;
+      pointer-events: none;
+      user-select: none;
+    }
+    .pause-symbol {
+      position: absolute;
+      width: 73.8%;
+      height: 73.8%;
+      object-fit: contain;
+      visibility: hidden;
+      pointer-events: none;
+      user-select: none;
+    }
+    .play-control[aria-pressed="true"]:not(.is-bursting) .pause-symbol { visibility: visible; }
+    .play-control.is-bursting .play-symbol { visibility: hidden; }
+    .play-particles { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+    .play-fragment {
+      position: absolute;
+      top: 13.1%;
+      left: 13.1%;
+      width: 73.8%;
+      height: 73.8%;
+      object-fit: contain;
+      visibility: hidden;
+      pointer-events: none;
+      user-select: none;
+      will-change: transform;
+    }
+    .play-control.is-bursting .play-fragment { visibility: visible; }
+    .audio-status {
+      position: fixed;
+      z-index: 3;
+      bottom: calc(max(clamp(24px, 8vh, 140px), env(safe-area-inset-bottom)) + 84px);
+      left: max(clamp(24px, 7vw, 100px), env(safe-area-inset-left));
+      display: none;
+      max-width: min(280px, calc(100vw - 48px));
+      color: #555;
+      font: 12px/1.4 system-ui, sans-serif;
+    }
+    .audio-status.is-visible { display: block; }
+    .soundcloud-credit {
+      position: fixed;
+      z-index: 10;
+      bottom: max(clamp(12px, 3vh, 32px), env(safe-area-inset-bottom));
+      left: max(clamp(24px, 7vw, 100px), env(safe-area-inset-left));
+      color: #999;
+      font: 10px/1.4 system-ui, sans-serif;
+      text-decoration: none;
+    }
+    .soundcloud-credit:hover { color: #555; }
+    .mood-control {
+      position: fixed;
+      z-index: 10;
+      right: max(clamp(24px, 7vw, 100px), env(safe-area-inset-right));
+      bottom: max(clamp(28px, 8vh, 140px), env(safe-area-inset-bottom));
+      width: clamp(190px, 28vw, 270px);
+      aspect-ratio: 5.76 / 1;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mood-control input {
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      left: 21%;
+      width: 61.8%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      appearance: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      box-shadow: none;
+      cursor: pointer;
+    }
+    .motion-artwork { display: block; width: 100%; height: 100%; pointer-events: none; }
+    .motion-marker-artwork {
+      position: absolute;
+      z-index: 1;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .mood-artwork, .mood-control object { -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .play-control { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="artwork" role="img" aria-label="Looping illustration of a saxophone player" width="902" height="1498"></canvas>
+  <canvas id="shirt-particles" aria-hidden="true" width="902" height="1498"></canvas>
+  <img id="shirt-motifs" src="frames/green-shirt-motifs.svg" alt="" aria-hidden="true">
+  <audio id="jazz-radio" preload="auto" playsinline="">
+    <source src="audio/sunny-caribbean-lounge.mp3" type="audio/mpeg">
+  </audio>
+  <button class="play-control" type="button" aria-label="Play Sunny Caribbean Lounge" aria-pressed="false">
+    <img class="play-symbol" src="play-button-frames/play-symbol.svg" alt="" draggable="false">
+    <img class="pause-symbol" src="play-button-frames/pause-symbol.svg" alt="" draggable="false">
+    <span class="play-particles" aria-hidden="true">
+      <img class="play-fragment" src="play-button-frames/play-side-1.svg" alt="" draggable="false" style="">
+      <img class="play-fragment" src="play-button-frames/play-side-2.svg" alt="" draggable="false" style="">
+      <img class="play-fragment" src="play-button-frames/play-side-3.svg" alt="" draggable="false" style="">
+    </span>
+  </button>
+  <div class="mood-control">
+    <object id="motion-artwork" class="motion-artwork" data="motion-energy-control.svg" type="image/svg+xml" aria-hidden="true"></object>
+    <svg class="motion-marker-artwork" viewBox="70 120 720 125" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <path id="motion-marker" fill="rgb(75.299072%, 75.299072%, 15.299988%)" d="M 266.511719 233.269531 C 259.234375 230.578125 261.859375 218.496094 261.589844 212.257812 C 260.511719 200.828125 259.417969 189.765625 260.808594 178.378906 C 260.929688 171.917969 262.746094 165.324219 261.738281 158.953125 C 260.894531 149.246094 255.226562 138.894531 258.640625 129.339844 C 259.863281 127.089844 263.035156 126.609375 264.894531 128.363281 C 268.632812 131.527344 267.113281 137.015625 266.910156 141.300781 C 268.742188 151.175781 268.992188 161.070312 268.964844 171.082031 C 269.570312 176.863281 271.496094 182.398438 271.625 188.242188 C 272.027344 194.527344 270.253906 200.71875 270.542969 206.984375 C 270.632812 213.578125 276.953125 233.117188 266.511719 233.269531Z"/>
+    </svg>
+    <input id="motion-energy" type="range" min="0" max="100" value="50" aria-label="Motion energy" aria-valuetext="Balanced">
+  </div>
+  <span id="radio-status" class="audio-status visually-hidden" role="status" aria-live="polite"></span>
+  <script>
+    (() => {
+      const canvas = document.querySelector('#artwork');
+      const context = canvas.getContext('2d', { alpha: false });
+      const frameSources = [1, 2, 3, 4].map((n) => `frames/frame-${n}.png`);
+      const eyeSources = [1, 2, 3, 4].map((n) => `frames/eye-${n}.png`);
+      // The eye crops use the same source-page coordinates as the full frames.
+      const eyeArea = { x: 620, y: 410, width: 50, height: 50 };
+      const frameRate = 5;
+      const eyeHoldSeconds = 3;
+      const frameDuration = 1000 / frameRate;
+      const images = [...frameSources, ...eyeSources].map((src) => {
+        const image = new Image();
+        const loaded = new Promise((resolve, reject) => {
+          image.onload = () => resolve(image);
+          image.onerror = reject;
+        });
+        image.src = src;
+        return loaded;
+      });
+      let frames = [];
+      let eyeFrames = [];
+      let current = 0;
+      let eyeCurrent = 0;
+      let eyeHoldUntil = 0;
+      let page = { x: 0, y: 0, width: 0, height: 0, scale: 1 };
+
+      function isShirtGreen(red, green, blue) {
+        return green >= red - 8 && green > blue + 16 && green > 90;
+      }
+
+      function makeGreenFreeFrame(image) {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const frameContext = canvas.getContext('2d', { willReadFrequently: true });
+        frameContext.drawImage(image, 0, 0);
+        const pixels = frameContext.getImageData(0, 0, canvas.width, canvas.height);
+        const { data, width } = pixels;
+        for (let y = 560; y < Math.min(1420, canvas.height); y += 1) {
+          for (let x = 420; x < Math.min(1200, width); x += 1) {
+            const index = (y * width + x) * 4;
+            if (!isShirtGreen(data[index], data[index + 1], data[index + 2])) continue;
+            data[index] = 255;
+            data[index + 1] = 255;
+            data[index + 2] = 255;
+          }
+        }
+        frameContext.putImageData(pixels, 0, 0);
+        return canvas;
+      }
+
+      function resize() {
+        const ratio = window.devicePixelRatio || 1;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        page.scale = Math.min(width / 2048, height / 2732);
+        page.width = 2048 * page.scale;
+        page.height = 2732 * page.scale;
+        page.x = (width - page.width) / 2;
+        page.y = (height - page.height) / 2;
+        draw();
+      }
+
+      function draw() {
+        if (!frames.length) return;
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, window.innerWidth, window.innerHeight);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(frames[current], page.x, page.y, page.width, page.height);
+
+        context.drawImage(
+          eyeFrames[eyeCurrent],
+          page.x + eyeArea.x * page.scale,
+          page.y + eyeArea.y * page.scale,
+          eyeArea.width * page.scale,
+          eyeArea.height * page.scale,
+        );
+      }
+
+      Promise.all(images).then((loaded) => {
+        const originalFrames = loaded.slice(0, 4);
+        eyeFrames = loaded.slice(4);
+        frames = originalFrames.map(makeGreenFreeFrame);
+        resize();
+        window.dispatchEvent(new Event('jazz-artwork-ready'));
+        window.setInterval(tick, frameDuration);
+      });
+
+      function tick() {
+        current = (current + 1) % frames.length;
+        const now = performance.now();
+        if (eyeHoldUntil > 0) {
+          if (now >= eyeHoldUntil) {
+            eyeCurrent = 2;
+            eyeHoldUntil = 0;
+          }
+        } else {
+          eyeCurrent = (eyeCurrent + 1) % frames.length;
+          if (eyeCurrent === 1) eyeHoldUntil = now + eyeHoldSeconds * 1000;
+        }
+        draw();
+      }
+
+      window.addEventListener('resize', resize);
+    })();
+  </script>
+  <script src="frames/shirt-dots.js"></script>
+  <script>
+    (() => {
+      const canvas = document.querySelector('#shirt-particles');
+      const context = canvas.getContext('2d');
+      const motifLayer = document.querySelector('#shirt-motifs');
+      const particles = (window.SHIRT_DOTS || []).map((dot) => ({
+        ...dot,
+        sourceX: dot.x,
+        sourceY: dot.y,
+        phase: Math.abs(Math.sin(dot.x * 12.9898 + dot.y * 78.233) * 43758.5453) % (Math.PI * 2),
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+      }));
+      const pointer = {
+        x: -10000, y: -10000, active: false,
+        intensity: 0, velocityX: 0, velocityY: 0,
+      };
+      const motionControl = document.querySelector('#motion-energy');
+      const motionMarker = document.querySelector('#motion-marker');
+      const motionGain = () => .4 + Number(motionControl.value) / 100 * 1.2;
+      function updateMotionControl() {
+        const value = Number(motionControl.value);
+        const valueText = value < 34 ? 'Mellow' : value > 66 ? 'Lively' : 'Balanced';
+        motionControl.setAttribute('aria-valuetext', valueText);
+        const markerX = 220 + value / 100 * 445;
+        motionMarker.setAttribute('transform', `translate(${markerX - 264} 0)`);
+        requestDraw();
+      }
+      motionControl.addEventListener('input', updateMotionControl);
+      motionControl.addEventListener('change', updateMotionControl);
+      motionControl.addEventListener('pointerdown', () => requestDraw(), { passive: true });
+      const audioSignal = window.jazzAudioSignal = {
+        active: false,
+        analyser: null,
+        data: null,
+        energy: 0,
+        peak: 0,
+        bands: { low: 0, mid: 0, high: 0 },
+      };
+      const source = { width: 2048, height: 2732 };
+      let page = { x: 0, y: 0, width: 0, height: 0, scale: 1 };
+      let animationFrame = 0;
+      let previousTime = 0;
+
+      function resize() {
+        const ratio = window.devicePixelRatio || 1;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        page.scale = Math.min(width / source.width, height / source.height);
+        page.width = source.width * page.scale;
+        page.height = source.height * page.scale;
+        page.x = (width - page.width) / 2;
+        page.y = (height - page.height) / 2;
+        motifLayer.style.transformOrigin = `${page.x + 786 * page.scale}px ${page.y + 850 * page.scale}px`;
+      }
+
+      function requestDraw() {
+        if (animationFrame) return;
+        previousTime = performance.now();
+        animationFrame = window.requestAnimationFrame(animate);
+      }
+
+      function readAudioBands(delta) {
+        const { analyser, data, bands } = audioSignal;
+        const targets = { low: 0, mid: 0, high: 0 };
+        let totalEnergy = 0;
+        if (audioSignal.active && analyser && data) {
+          analyser.getByteFrequencyData(data);
+          const binWidth = analyser.context.sampleRate / analyser.fftSize;
+          const averageRange = (startHz, endHz) => {
+            const start = Math.max(1, Math.floor(startHz / binWidth));
+            const end = Math.min(data.length, Math.ceil(endHz / binWidth));
+            let total = 0;
+            for (let i = start; i < end; i += 1) total += data[i];
+            return end > start ? total / (end - start) / 255 : 0;
+          };
+          // Compress the spectrum so quieter musical phrases still move the shirt.
+          targets.low = Math.min(1, Math.sqrt(averageRange(35, 250)) * 2.15);
+          targets.mid = Math.min(1, Math.sqrt(averageRange(250, 2200)) * 2.05);
+          targets.high = Math.min(1, Math.sqrt(averageRange(2200, 9000)) * 1.9);
+          totalEnergy = Math.min(1, Math.sqrt(averageRange(35, 9000)) * 1.8);
+        }
+        const energyResponse = totalEnergy > audioSignal.energy ? 16 : 7;
+        audioSignal.energy += (totalEnergy - audioSignal.energy) * Math.min(1, delta * energyResponse);
+        audioSignal.peak = Math.max(audioSignal.energy, audioSignal.peak * Math.max(0, 1 - delta * 2.8));
+        for (const band of ['low', 'mid', 'high']) {
+          const response = targets[band] > bands[band] ? 12 : 5;
+          bands[band] += (targets[band] - bands[band]) * Math.min(1, delta * response);
+        }
+      }
+
+      function audioOffset(particle, now) {
+        const { low, mid, high } = audioSignal.bands;
+        // Favor the sax's midrange body and upper harmonics over kick and bass.
+        const pulse = Math.min(1.8, (low * .3 + mid * .9 + high * .7 + audioSignal.energy * .35) * motionGain());
+        const dx = particle.sourceX - 786;
+        const dy = particle.sourceY - 850;
+        const distance = Math.hypot(dx, dy) || 1;
+        const drift = (low * 10 + mid * 26 + high * 18) * page.scale * motionGain();
+        const shimmer = (high * 14 + mid * 6 + audioSignal.energy * 5) * page.scale * motionGain();
+        const phase = now * (2 + high * 4.5 + mid * 1.8) + particle.phase;
+        return {
+          x: (dx / distance) * drift + Math.sin(phase) * shimmer,
+          y: (dy / distance) * drift + Math.cos(phase * .83) * shimmer
+          + Math.sin(now * (2.1 + mid * 2.5) + particle.phase * 1.7) * (mid * 7 + audioSignal.energy * 3) * page.scale * motionGain(),
+          pulse,
+        };
+      }
+
+      function animate(now) {
+        animationFrame = 0;
+        const delta = Math.min((now - previousTime) / 1000, 1 / 30);
+        previousTime = now;
+        readAudioBands(delta);
+        pointer.intensity *= Math.exp(-delta * 5.5);
+        pointer.velocityX *= Math.exp(-delta * 8);
+        pointer.velocityY *= Math.exp(-delta * 8);
+        context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        const { low, mid, high } = audioSignal.bands;
+        let moving = pointer.intensity > .008 || audioSignal.active
+          || low > .004 || mid > .004 || high > .004;
+
+        for (const particle of particles) {
+          const baseX = page.x + particle.sourceX * page.scale;
+          const baseY = page.y + particle.sourceY * page.scale;
+          const audio = audioOffset(particle, now / 1000);
+          const x = baseX + particle.x + audio.x;
+          const y = baseY + particle.y + audio.y;
+          let ax = -particle.x * 30 - particle.vx * 8;
+          let ay = -particle.y * 30 - particle.vy * 8;
+          const toX = x - pointer.x;
+          const toY = y - pointer.y;
+          const distance = Math.hypot(toX, toY) || 1;
+          const radius = 105;
+
+          if (pointer.active && pointer.intensity > .008 && distance < radius) {
+            const falloff = 1 - distance / radius;
+            const force = 1850 * pointer.intensity * falloff * falloff;
+            const nx = toX / distance;
+            const ny = toY / distance;
+            const sweep = Math.min(1, Math.hypot(pointer.velocityX, pointer.velocityY) / 900);
+            const tangent = force * (.12 + sweep * .25);
+            ax += nx * force - ny * tangent;
+            ay += ny * force + nx * tangent;
+          }
+
+          particle.vx += ax * delta;
+          particle.vy += ay * delta;
+          particle.x += particle.vx * delta;
+          particle.y += particle.vy * delta;
+          if (Math.abs(particle.x) > .2 || Math.abs(particle.y) > .2
+            || Math.abs(particle.vx) > 1 || Math.abs(particle.vy) > 1) moving = true;
+
+          context.fillStyle = '#fff';
+          context.beginPath();
+          context.ellipse(
+            baseX,
+            baseY,
+            Math.max(particle.rx + .5, particle.r * 2.05) * page.scale,
+            Math.max(particle.ry + .5, particle.r * 1.8) * page.scale,
+            0,
+            0,
+            Math.PI * 2,
+          );
+          context.fill();
+        }
+
+        for (const particle of particles) {
+          const baseX = page.x + particle.sourceX * page.scale;
+          const baseY = page.y + particle.sourceY * page.scale;
+          const audio = audioOffset(particle, now / 1000);
+          const x = baseX + particle.x + audio.x;
+          const y = baseY + particle.y + audio.y;
+          context.fillStyle = particle.color;
+          context.beginPath();
+          const saxEnergy = audio.pulse;
+          const pulseBeat = .5 + .5 * Math.sin(now * (.006 + high * .009 + mid * .003) + particle.phase);
+          const sizePulse = Math.min(.71875, saxEnergy * motionGain() * (.72 + 1.15 * pulseBeat));
+          const particleRadius = Math.max(.65, particle.r * page.scale * (1 + sizePulse));
+          context.ellipse(
+            x,
+            y,
+            particleRadius,
+            particleRadius * .86,
+            0,
+            0,
+            Math.PI * 2,
+          );
+          context.fill();
+        }
+
+        const beatTime = (now % 900);
+        const firstBeat = Math.exp(-Math.pow((beatTime - 75) / 80, 2));
+        const secondBeat = .62 * Math.exp(-Math.pow((beatTime - 255) / 105, 2));
+        const heartBeat = Math.min(1, firstBeat + secondBeat);
+        const greenEnergy = audioSignal.active
+          ? (.72 + low * .45 + audioSignal.energy * .55) * motionGain()
+          : 0;
+        const motifPulse = audioSignal.active ? heartBeat * Math.min(1, greenEnergy) * .035 : 0;
+        motifLayer.style.transform = `scale(${1 + motifPulse})`;
+
+        if (moving) requestDraw();
+      }
+
+      function onPointerMove(event) {
+        if (event.pointerType === 'touch') return;
+        const now = performance.now();
+        const elapsed = Math.max(8, Math.min(80, now - (pointer.lastTime || now - 16)));
+        const moveX = event.clientX - pointer.x;
+        const moveY = event.clientY - pointer.y;
+        pointer.x = event.clientX;
+        pointer.y = event.clientY;
+        pointer.lastTime = now;
+        pointer.velocityX = moveX / elapsed * 1000;
+        pointer.velocityY = moveY / elapsed * 1000;
+        const speed = Math.hypot(pointer.velocityX, pointer.velocityY);
+        pointer.intensity = Math.max(pointer.intensity, Math.min(1, speed / 1050));
+        const margin = 96;
+        const left = page.x + 448 * page.scale - margin;
+        const right = page.x + 1124 * page.scale + margin;
+        const top = page.y + 597 * page.scale - margin;
+        const bottom = page.y + 1343 * page.scale + margin;
+        pointer.active = pointer.x >= left && pointer.x <= right
+          && pointer.y >= top && pointer.y <= bottom;
+        requestDraw();
+      }
+
+      function onPointerLeave() {
+        pointer.active = false;
+        requestDraw();
+      }
+
+      resize();
+      updateMotionControl();
+      window.addEventListener('resize', resize);
+      window.addEventListener('pointermove', onPointerMove, { passive: true });
+      window.addEventListener('pointerleave', onPointerLeave);
+      window.addEventListener('jazz-audio-playing', requestDraw);
+      window.addEventListener('jazz-audio-paused', requestDraw);
+      window.addEventListener('jazz-artwork-ready', requestDraw);
+    })();
+  </script>
+  <script>
+    (() => {
+      const button = document.querySelector('.play-control');
+      const pieces = [...button.querySelectorAll('.play-fragment')];
+      const radio = document.querySelector('#jazz-radio');
+      const radioStatus = document.querySelector('#radio-status');
+      const audioSignal = window.jazzAudioSignal;
+      let audioContext = null;
+      let audioAnalyser = null;
+      let audioSource = null;
+      let audioAnalysisFailed = false;
+      const impulses = [
+        { x: 650, y: -520, spin: 3.1, phase: .4 },
+        { x: 850, y: -1050, spin: -2.5, phase: 2.5 },
+        { x: 1180, y: -240, spin: -3.4, phase: 4.6 },
+      ];
+      let bursting = false;
+
+      function connectAudioAnalysis() {
+        if (audioAnalysisFailed) return;
+        if (audioAnalyser) {
+          if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+          return;
+        }
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          radioStatus.textContent = 'This browser cannot analyse audio for the shirt animation.';
+          radioStatus.classList.add('is-visible');
+          return;
+        }
+        try {
+          audioContext = new AudioContextClass();
+          audioAnalyser = audioContext.createAnalyser();
+          audioAnalyser.fftSize = 512;
+          audioAnalyser.smoothingTimeConstant = .78;
+          audioAnalyser.minDecibels = -85;
+          audioAnalyser.maxDecibels = -25;
+          audioSource = audioContext.createMediaElementSource(radio);
+          audioSource.connect(audioAnalyser);
+          audioAnalyser.connect(audioContext.destination);
+          audioSignal.analyser = audioAnalyser;
+          audioSignal.data = new Uint8Array(audioAnalyser.frequencyBinCount);
+          if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+        } catch (error) {
+          // If analysis setup fails after the media source is created, route it
+          // straight to the speakers so the track remains audible.
+          if (audioSource && audioContext) {
+            try {
+              audioSource.disconnect();
+              audioSource.connect(audioContext.destination);
+              if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+            } catch {}
+          }
+          audioAnalysisFailed = true;
+          audioSignal.analyser = null;
+          audioSignal.data = null;
+          audioAnalyser = null;
+          radioStatus.textContent = `Audio analysis is unavailable (${error?.name || 'setup error'}); playback will continue.`;
+          radioStatus.classList.add('is-visible');
+        }
+      }
+
+      radio.addEventListener('playing', () => {
+        audioSignal.active = true;
+        connectAudioAnalysis();
+        window.dispatchEvent(new Event('jazz-audio-playing'));
+        if (!audioAnalysisFailed) radioStatus.classList.remove('is-visible');
+        button.setAttribute('aria-pressed', 'true');
+        button.setAttribute('aria-label', 'Pause Sunny Caribbean Lounge');
+      });
+      radio.addEventListener('pause', () => {
+        audioSignal.active = false;
+        window.dispatchEvent(new Event('jazz-audio-paused'));
+        button.setAttribute('aria-pressed', 'false');
+        button.setAttribute('aria-label', 'Play Sunny Caribbean Lounge');
+      });
+      radio.addEventListener('error', () => {
+        audioSignal.active = false;
+        window.dispatchEvent(new Event('jazz-audio-paused'));
+        button.setAttribute('aria-pressed', 'false');
+        button.setAttribute('aria-label', 'Play Sunny Caribbean Lounge');
+        radioStatus.textContent = 'Sunny Caribbean Lounge could not be loaded. Check that the audio file is beside the page in its audio folder.';
+        radioStatus.classList.add('is-visible');
+      });
+
+      button.addEventListener('click', () => {
+        connectAudioAnalysis();
+        if (radio.paused) {
+          radio.volume = 1;
+          radio.muted = false;
+          button.setAttribute('aria-pressed', 'true');
+          button.setAttribute('aria-label', 'Pause Sunny Caribbean Lounge');
+          const playRequest = radio.play();
+          if (playRequest) {
+            playRequest.then(() => {
+              audioSignal.active = true;
+              button.setAttribute('aria-pressed', 'true');
+              button.setAttribute('aria-label', 'Pause Sunny Caribbean Lounge');
+              window.dispatchEvent(new Event('jazz-audio-playing'));
+            }).catch((error) => {
+              radioStatus.textContent = `Sunny Caribbean Lounge did not start (${error.name}).`;
+              radioStatus.classList.add('is-visible');
+              button.setAttribute('aria-pressed', 'false');
+            });
+          }
+        } else {
+          radio.pause();
+        }
+
+        if (bursting) return;
+        bursting = true;
+        button.classList.add('is-bursting');
+
+        const burstImpulses = impulses.map((impulse) => {
+          const angle = (Math.random() - .5) * .9;
+          const strength = .525 + Math.random() * .375;
+          const cosine = Math.cos(angle) * strength;
+          const sine = Math.sin(angle) * strength;
+          return {
+            x: impulse.x * cosine - impulse.y * sine,
+            y: impulse.x * sine + impulse.y * cosine,
+            spin: (Math.random() < .5 ? -1 : 1) * (24 + Math.random() * 14),
+            phase: impulse.phase + Math.random() * Math.PI * 2,
+          };
+        });
+        const states = pieces.map((piece, index) => ({
+          piece,
+          x: 0,
+          y: 0,
+          vx: burstImpulses[index].x,
+          vy: burstImpulses[index].y,
+          angle: 0,
+          spin: burstImpulses[index].spin,
+          phase: burstImpulses[index].phase,
+          mass: .7 + Math.random() * .7,
+          torque: (Math.random() - .5) * 260,
+        }));
+        const anchors = [
+          { x: 2, y: 15 },
+          { x: 2, y: -15 },
+          { x: -26, y: 6 },
+        ];
+        const startedAt = performance.now();
+        let previousTime = startedAt;
+
+        function animate(now) {
+          const elapsed = (now - startedAt) / 1000;
+          const delta = Math.min((now - previousTime) / 1000, 1 / 30);
+          previousTime = now;
+          const collisionForces = states.map(() => ({ x: 0, y: 0 }));
+          const collisionFade = Math.exp(-elapsed * 1.3);
+
+          for (let i = 0; i < states.length; i += 1) {
+            for (let j = i + 1; j < states.length; j += 1) {
+              const dx = states[i].x + anchors[i].x - states[j].x - anchors[j].x;
+              const dy = states[i].y + anchors[i].y - states[j].y - anchors[j].y;
+              const distance = Math.hypot(dx, dy) || 1;
+              const overlap = 54 - distance;
+              if (overlap <= 0) continue;
+              const force = overlap * 2.5 * collisionFade;
+              const fx = (dx / distance) * force;
+              const fy = (dy / distance) * force;
+              collisionForces[i].x += fx;
+              collisionForces[i].y += fy;
+              collisionForces[j].x -= fx;
+              collisionForces[j].y -= fy;
+            }
+          }
+
+          for (const [index, state] of states.entries()) {
+            const distance = Math.hypot(state.x, state.y) || 1;
+            const fade = Math.exp(-elapsed * 1.05);
+            const turbulence = 270 * fade;
+            const swirl = (260 + Math.sin(elapsed * 7 + state.phase) * 210) * fade;
+            const noiseX = (Math.sin(elapsed * 15 + state.phase + state.x * .035)
+              + Math.cos(elapsed * 23 + state.y * .026)) * turbulence;
+            const noiseY = (Math.cos(elapsed * 17 + state.phase + state.y * .03)
+              + Math.sin(elapsed * 19 + state.x * .022)) * turbulence;
+            const ax = (-22 * state.x - 4.8 * state.vx - (state.y / distance) * swirl
+              + noiseX + collisionForces[index].x) / state.mass;
+            const ay = (-22 * state.y - 4.8 * state.vy + (state.x / distance) * swirl
+              + noiseY + collisionForces[index].y) / state.mass;
+            state.vx += ax * delta;
+            state.vy += ay * delta;
+            state.x += state.vx * delta;
+            state.y += state.vy * delta;
+
+            const angularNoise = Math.sin(elapsed * 8.5 + state.phase)
+              + Math.sin(elapsed * 19 + state.phase * 1.7) * .55
+              + Math.cos(elapsed * 27 - state.phase) * .25;
+            const angularAcceleration = -1.5 * state.spin
+              + angularNoise * state.torque * Math.exp(-elapsed * .85);
+            state.spin += angularAcceleration * delta;
+            state.angle += state.spin * delta;
+            state.piece.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.angle}rad)`;
+
+          }
+
+          if (elapsed < 1.1) {
+            window.requestAnimationFrame(animate);
+            return;
+          }
+
+          const reformStarts = states.map(({ x, y, angle }) => ({ x, y, angle }));
+          const reformStartedAt = now;
+          const reformDuration = 650;
+
+          function reform(reformTime) {
+            const progress = Math.min((reformTime - reformStartedAt) / reformDuration, 1);
+            const eased = progress < .5
+              ? 4 * progress * progress * progress
+              : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+            states.forEach((state, index) => {
+              const start = reformStarts[index];
+              const remaining = 1 - eased;
+              state.piece.style.transform = `translate(${start.x * remaining}px, ${start.y * remaining}px) rotate(${start.angle * remaining}rad)`;
+            });
+
+            if (progress < 1) {
+              window.requestAnimationFrame(reform);
+              return;
+            }
+
+            for (const piece of pieces) piece.style.transform = '';
+            button.classList.remove('is-bursting');
+            bursting = false;
+          }
+
+          window.requestAnimationFrame(reform);
+        }
+
+        window.requestAnimationFrame(animate);
+      });
+    })();
+  </script>
+
+
+</body></html>
